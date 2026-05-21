@@ -52,7 +52,7 @@ def grouping(
     """
     Pour chaque geo_cluster_id présent dans df, télécharge les images dans
     un dossier temporaire (auto-supprimé), lance la pipeline, et retourne df
-    enrichi avec group_id ("{geo_cluster_id}_{local_gid}"), group_size,
+    enrichi avec group_id ("{geo_cluster_id}_{local_gid}")
     et is_central (True pour la photo centrale de chaque groupe).
 
     output_dir=None (défaut) : aucun fichier écrit sur disque.
@@ -83,9 +83,12 @@ def grouping(
                 emb_list, valid_paths = [], []
                 for p in paths:
                     pid = Path(p).stem
-                    if pid in id_to_emb:
-                        emb_list.append(id_to_emb[pid])
-                        valid_paths.append(p)
+                    emb = id_to_emb.get(pid)
+                    if emb is None or (isinstance(emb, float) and np.isnan(emb)):
+                        logger.warning(f"Cluster {cid} : pas d'embedding pour {pid}, ignoré")
+                        continue
+                    emb_list.append(emb)
+                    valid_paths.append(p)
                 if len(valid_paths) < 2:
                     logger.warning(f"Cluster {cid} : moins de 2 embeddings alignés, ignoré")
                     continue
