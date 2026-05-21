@@ -28,8 +28,8 @@ from PIL import Image
 from tqdm import tqdm
 from transformers import AutoImageProcessor, Dinov2Model
 
-from src.matching.sift import SiftMatcher
-from src.matching.lightglue import LightGlueMatcher
+from .sift import SiftMatcher
+from .lightglue import LightGlueMatcher
 logger = logging.getLogger(__name__)
 
 

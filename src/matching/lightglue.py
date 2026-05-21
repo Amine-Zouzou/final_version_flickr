@@ -23,7 +23,7 @@ from pathlib import Path
 from lightglue import LightGlue, SuperPoint
 from lightglue.utils import load_image, rbd
 
-from src.matching.sift import MatchResult
+from .sift import MatchResult
 
 logger = logging.getLogger(__name__)
 

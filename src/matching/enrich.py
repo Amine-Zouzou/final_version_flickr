@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from src.matching.cluster import Clusterer
+from .cluster import Clusterer
 
 logger = logging.getLogger(__name__)
 
