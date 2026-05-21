@@ -80,7 +80,8 @@ class Clusterer:
             torch.device("cpu")
         )
         logger.info(f"Clusterer device: {self.device}")
-        self._embed_model, self._embed_processor = self._load_dinov2()
+        self._embed_model     = None  # chargé à la demande via _ensure_dinov2()
+        self._embed_processor = None
         self._matcher = SiftMatcher({
             "matches_good_min":  self.cfg.matches_good_min,
             "inliers_min":       self.cfg.inliers_min,
@@ -103,8 +104,14 @@ class Clusterer:
         model     = Dinov2Model.from_pretrained(self.cfg.embed_model).to(self.device).eval()
         return model, processor
 
+    def _ensure_dinov2(self):
+        """Charge DINOv2 uniquement si pas déjà en mémoire."""
+        if self._embed_model is None:
+            self._embed_model, self._embed_processor = self._load_dinov2()
+
     def _embed(self, path: str) -> np.ndarray | None:
         """Returns L2-normalised DINOv2 CLS token embedding for one image."""
+        self._ensure_dinov2()
         try:
             img    = Image.open(path).convert("RGB")
             inputs = self._embed_processor(images=img, return_tensors="pt")
@@ -150,7 +157,7 @@ class Clusterer:
             by_node[row["b"]].append(row)
 
         kept: set[tuple] = set()
-        for node, rows in by_node.items():
+        for _, rows in by_node.items():
             rows_sorted = sorted(
                 rows,
                 key=lambda r: (r["edge_score"], r["best_inliers"], r["matches_good"]),

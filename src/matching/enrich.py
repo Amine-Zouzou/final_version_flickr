@@ -41,8 +41,8 @@ def _find_central_photos(groups_df: pd.DataFrame, edges_df: pd.DataFrame) -> set
 
 
 def grouping(
-    clusterer: Clusterer,
     df: pd.DataFrame,
+    clusterer: Clusterer | None = None,
     output_dir: str | None = None,
     url_col: str = "image_url",
     id_col: str = "id",
@@ -58,6 +58,9 @@ def grouping(
     output_dir=None (défaut) : aucun fichier écrit sur disque.
     Si embedding_col est fourni, DINOv2 n'est pas chargé.
     """
+    if clusterer is None:
+        clusterer = Clusterer()
+
     cluster_ids = df[cluster_col].unique()
     logger.info(
         f"run_on_dataframe : {len(cluster_ids)} clusters | "
