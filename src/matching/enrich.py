@@ -52,7 +52,7 @@ def grouping(
     """
     Pour chaque geo_cluster_id présent dans df, télécharge les images dans
     un dossier temporaire (auto-supprimé), lance la pipeline, et retourne df
-    enrichi avec group_id ("{geo_cluster_id}_{local_gid}")
+    enrichi avec group_id ("{geo_cluster_id}_{local_gid}"), group_size,
     et is_central (True pour la photo centrale de chaque groupe).
 
     output_dir=None (défaut) : aucun fichier écrit sur disque.
@@ -84,10 +84,15 @@ def grouping(
                 for p in paths:
                     pid = Path(p).stem
                     emb = id_to_emb.get(pid)
-                    if emb is None or (isinstance(emb, float) and np.isnan(emb)):
-                        logger.warning(f"Cluster {cid} : pas d'embedding pour {pid}, ignoré")
+                    if emb is None:
                         continue
-                    emb_list.append(emb)
+                    try:
+                        arr = np.asarray(emb, dtype=np.float32)
+                    except (ValueError, TypeError):
+                        continue
+                    if arr.ndim != 1 or arr.size == 0:
+                        continue
+                    emb_list.append(arr)
                     valid_paths.append(p)
                 if len(valid_paths) < 2:
                     logger.warning(f"Cluster {cid} : moins de 2 embeddings alignés, ignoré")
@@ -104,7 +109,11 @@ def grouping(
         central_photos = _find_central_photos(groups_df, edges_df)
 
         groups_df = groups_df.copy()
-        groups_df[id_col]       = groups_df["photo"].str.replace(r"\.jpe?g$", "", regex=True)
+        groups_df[id_col]       = (
+            groups_df["photo"]
+            .str.replace(r"\.jpe?g$", "", regex=True)
+            .astype(df[id_col].dtype)
+        )
         groups_df["group_id"]   = groups_df["group_id"].apply(lambda g: f"{cid}_{g}")
         groups_df["is_central"] = groups_df["photo"].isin(central_photos)
         mapping_rows.append(groups_df[[id_col, "group_id", "is_central"]])
