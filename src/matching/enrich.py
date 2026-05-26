@@ -44,15 +44,16 @@ def grouping(
     df: pd.DataFrame,
     clusterer: Clusterer | None = None,
     output_dir: str | None = None,
+    cache=None,
     url_col: str = "image_url",
     id_col: str = "id",
     cluster_col: str = "geo_cluster_id",
-    embedding_col: str | None = "sig_lip_vect_n",
+    embedding_col: str | None = "clip_vect_224",
 ) -> pd.DataFrame:
     """
-    Pour chaque geo_cluster_id présent dans df, télécharge les images dans
-    un dossier temporaire (auto-supprimé), lance la pipeline, et retourne df
-    enrichi avec group_id ("{geo_cluster_id}_{local_gid}"), group_size,
+    Pour chaque geo_cluster_id présent dans df, récupère les images depuis
+    le cache (cache.get(url) → path local) ou les télécharge si cache=None.
+    Retourne df enrichi avec group_id ("{geo_cluster_id}_{local_gid}"),
     et is_central (True pour la photo centrale de chaque groupe).
 
     output_dir=None (défaut) : aucun fichier écrit sur disque.
@@ -72,28 +73,39 @@ def grouping(
         sub     = df[df[cluster_col] == cid]
         out_dir = str(Path(output_dir) / f"cluster_{cid:05d}") if output_dir else None
 
+        # stem de l'URL → URL complète (ex: "52123_abc_b" → "https://...52123_abc_b.jpg")
+        stem_to_url = {
+            Path(row[url_col]).stem: row[url_col]
+            for _, row in sub.iterrows()
+        }
+
         with tempfile.TemporaryDirectory() as img_dir:
-            paths = clusterer._download_images(sub, Path(img_dir), url_col, id_col)
+            if cache is not None:
+                paths = []
+                for _, row in sub.iterrows():
+                    image = cache.get(row[url_col])   # PIL.Image | None
+                    if image is not None:
+                        fpath = Path(img_dir) / Path(row[url_col]).name
+                        image.save(fpath)
+                        paths.append(str(fpath))
+            else:
+                paths = clusterer._download_images(sub, Path(img_dir), url_col, id_col)
+
             if len(paths) < 2:
                 logger.warning(f"Cluster {cid} : moins de 2 images, ignoré")
                 continue
 
             if embedding_col is not None:
-                id_to_emb = dict(zip(sub[id_col].astype(str), sub[embedding_col]))
+                stem_to_emb = {
+                    Path(row[url_col]).stem: row[embedding_col]
+                    for _, row in sub.iterrows()
+                }
                 emb_list, valid_paths = [], []
                 for p in paths:
-                    pid = Path(p).stem
-                    emb = id_to_emb.get(pid)
-                    if emb is None:
-                        continue
-                    try:
-                        arr = np.asarray(emb, dtype=np.float32)
-                    except (ValueError, TypeError):
-                        continue
-                    if arr.ndim != 1 or arr.size == 0:
-                        continue
-                    emb_list.append(arr)
-                    valid_paths.append(p)
+                    stem = Path(p).stem   # "52123_abc_b" — aligné avec stem_to_emb
+                    if stem in stem_to_emb:
+                        emb_list.append(stem_to_emb[stem])
+                        valid_paths.append(p)
                 if len(valid_paths) < 2:
                     logger.warning(f"Cluster {cid} : moins de 2 embeddings alignés, ignoré")
                     continue
@@ -109,20 +121,17 @@ def grouping(
         central_photos = _find_central_photos(groups_df, edges_df)
 
         groups_df = groups_df.copy()
-        groups_df[id_col]       = (
-            groups_df["photo"]
-            .str.replace(r"\.jpe?g$", "", regex=True)
-            .astype(df[id_col].dtype)
-        )
+        groups_df[url_col]      = groups_df["photo"].apply(
+                                      lambda p: stem_to_url.get(Path(p).stem))
         groups_df["group_id"]   = groups_df["group_id"].apply(lambda g: f"{cid}_{g}")
         groups_df["is_central"] = groups_df["photo"].isin(central_photos)
-        mapping_rows.append(groups_df[[id_col, "group_id", "is_central"]])
+        mapping_rows.append(groups_df[[url_col, "group_id", "is_central"]])
 
     if not mapping_rows:
         return df.assign(group_id=pd.NA, is_central=False)
 
     mapping = pd.concat(mapping_rows, ignore_index=True)
-    return df.merge(mapping, on=id_col, how="left")
+    return df.merge(mapping, on=url_col, how="left")
 
 
 def export_groups(
@@ -165,7 +174,7 @@ def export_groups(
     sub[group_col] = sub[group_col].astype(str)
 
     # taille de chaque groupe
-    sizes = sub.groupby(group_col)[id_col].transform("count")
+    sizes = sub.groupby(group_col)[url_col].transform("count")
     sub = sub[sizes >= min_group_size]
 
     if sub.empty:
@@ -183,12 +192,12 @@ def export_groups(
         n_ok, n_fail = 0, 0
 
         for _, row in rows.iterrows():
-            photo_id   = str(row[id_col])
             url        = str(row[url_col])
             is_central = bool(row.get(central_col, False))
 
             ext      = _guess_ext(url)
-            filename = f"CENTRAL_{photo_id}{ext}" if is_central else f"{photo_id}{ext}"
+            stem     = Path(url).stem   # "52123_abc_b"
+            filename = f"CENTRAL_{stem}{ext}" if is_central else f"{stem}{ext}"
             dest     = folder / filename
 
             if dest.exists():
@@ -201,10 +210,10 @@ def export_groups(
                     dest.write_bytes(r.content)
                     n_ok += 1
                 else:
-                    logger.warning("HTTP %s pour %s", r.status_code, photo_id)
+                    logger.warning("HTTP %s pour %s", r.status_code, stem)
                     n_fail += 1
             except Exception as e:
-                logger.warning("Échec %s : %s", photo_id, e)
+                logger.warning("Échec %s : %s", stem, e)
                 n_fail += 1
 
         summary.append({"group_id": gid, "n_ok": n_ok, "n_fail": n_fail, "folder": str(folder)})

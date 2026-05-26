@@ -189,7 +189,7 @@ class Clusterer:
         paths = []
         for _, row in df.iterrows():
             src   = str(row[url_col])
-            fname = f"{row[id_col]}.jpg"
+            fname = Path(src).name   # ex: "52123456789_abc123_b.jpg"
             fpath = out_dir / fname
             if not fpath.exists():
                 if src.startswith("http"):
