@@ -39,15 +39,31 @@ def _find_central_photos(groups_df: pd.DataFrame, edges_df: pd.DataFrame) -> set
 
     return central
 
+# def cluster_to_group(
+#     df: pd.Dataframe,
+#     cache,
+# ) -> pd.DataFrame:
+
+#     df['geo_cluster_id']
+#     df['url_o']
+#     df['clip_vect_224']
+#     edges = filter embeddings
+#     for (url_b), (url_a) in edges:
+#         img_a = cache.get(url_a)
+#         img_b = cache.get(url_b)
+
+#         results = photogrametry(,)
+#     #use urls as index to map between df and matched edges    
 
 def grouping(
     df: pd.DataFrame,
+    cache,
     clusterer: Clusterer | None = None,
     output_dir: str | None = None,
-    url_col: str = "image_url",
+    url_col: str = "url_o",
     id_col: str = "id",
     cluster_col: str = "geo_cluster_id",
-    embedding_col: str | None = "sig_lip_vect_n",
+    embedding_col: str | None = "clip_vect_224",
 ) -> pd.DataFrame:
     """
     Pour chaque geo_cluster_id présent dans df, télécharge les images dans
@@ -73,7 +89,7 @@ def grouping(
         out_dir = str(Path(output_dir) / f"cluster_{cid:05d}") if output_dir else None
 
         with tempfile.TemporaryDirectory() as img_dir:
-            paths = clusterer._download_images(sub, Path(img_dir), url_col, id_col)
+            paths = clusterer._download_images(sub, cache, Path(img_dir), url_col, id_col)
             if len(paths) < 2:
                 logger.warning(f"Cluster {cid} : moins de 2 images, ignoré")
                 continue

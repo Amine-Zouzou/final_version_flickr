@@ -26,6 +26,7 @@ import torch
 import networkx as nx
 from PIL import Image
 from tqdm import tqdm
+from io import BytesIO
 from transformers import AutoImageProcessor, Dinov2Model
 
 from .sift import SiftMatcher
@@ -179,6 +180,7 @@ class Clusterer:
     def _download_images(
         self,
         df: "pd.DataFrame",
+        cache,
         out_dir: "Path",
         url_col: str,
         id_col: str,
@@ -194,12 +196,23 @@ class Clusterer:
             if not fpath.exists():
                 if src.startswith("http"):
                     try:
-                        r = _requests.get(src, timeout=20)
-                        if r.status_code == 200:
-                            fpath.write_bytes(r.content)
+                        img = cache.get(src)
+                        if img:
+                            buffer = BytesIO()
+                            img.save(buffer, format="JPEG")
+                            fpath.write_bytes(buffer.getvalue())
                         else:
-                            logger.warning(f"HTTP {r.status_code} pour {row[id_col]}")
+                            looger.warning(f"File not in cache: {src}")
                             continue
+                        # r = _requests.get(src, timeout=20)
+
+                        # if r.status_code == 200:
+                        #     fpath.write_bytes(r.content)
+                        # else:
+                        #     logger.warning(f"HTTP {r.status_code} pour {row[id_col]}")
+                        #     continue
+
+
                     except Exception as e:
                         logger.warning(f"Échec téléchargement {row[id_col]}: {e}")
                         continue
