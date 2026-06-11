@@ -29,5 +29,6 @@ Thumbs.db
 # Jupyter
 .ipynb_checkpoints/
 
-# Large binary files (PDFs go in report/ but are not tracked by git)
+# Large binary files — track only the final report, not intermediates
 *.pdf
+!report/*.pdf
