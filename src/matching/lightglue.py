@@ -36,6 +36,7 @@ DEFAULT = dict(
     matches_good_min=10,
     f_ransac_thresh=3.0,
     ransac_conf=0.999,
+    border_fraction=0.07,  # zero-out this % of each edge before SuperPoint → kills watermarks & frames
 )
 
 
@@ -55,6 +56,7 @@ class LightGlueMatcher:
         self.matches_good_min = c["matches_good_min"]
         self.f_thresh         = c["f_ransac_thresh"]
         self.ransac_conf      = c["ransac_conf"]
+        self.border_fraction  = c["border_fraction"]
 
         self.device = (
             torch.device("mps")  if torch.backends.mps.is_available() else
@@ -69,6 +71,11 @@ class LightGlueMatcher:
     def _load(self, path: str) -> torch.Tensor | None:
         try:
             img = load_image(path).to(self.device)
+            # Stereocard: crop to left half if width > 1.7 * height
+            h, w = img.shape[-2:]
+            if w > 1.7 * h:
+                img = img[..., :w // 2]
+                w = w // 2
             # Resize si nécessaire
             h, w = img.shape[-2:]
             if max(h, w) > self.resize_max:
@@ -79,6 +86,15 @@ class LightGlueMatcher:
                     mode="bilinear",
                     align_corners=False,
                 ).squeeze(0)
+            # Zero-out border region so SuperPoint ignores frames, watermarks, vignettes
+            h, w = img.shape[-2:]
+            bh = max(1, int(h * self.border_fraction))
+            bw = max(1, int(w * self.border_fraction))
+            img = img.clone()
+            img[..., :bh, :]    = 0.0
+            img[..., h - bh:, :] = 0.0
+            img[..., :, :bw]    = 0.0
+            img[..., :, w - bw:] = 0.0
             return img
         except Exception as e:
             logger.warning(f"Impossible de charger {path}: {e}")

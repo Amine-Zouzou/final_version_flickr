@@ -1,8 +1,30 @@
+# Python
 .venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+flico.egg-info/
+*.egg
+dist/
+build/
+
+# Credentials & environment
 .env
+
+# Data & results (large files, not tracked)
 dir/
 metadata/
 metadata_combined/
 models/
-flico.egg-info/
-__pycache__
+images_*/
+results*/
+grouped_results/
+*.csv
+!scripts/*.csv
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/

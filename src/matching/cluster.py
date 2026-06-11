@@ -41,18 +41,19 @@ class ClusterConfig:
     # Candidate retrieval
     clip_topk:          int   = 10    # top-k neighbours per image
     clip_mutual:        bool  = False  # no mutual constraint → better recall
-    clip_sim_threshold: float = 0.65  # min DINOv2 cosine similarity to attempt SIFT
-    # SIFT thresholds — permissif, premier filtre rapide
-    matches_good_min:   int   = 20
-    inliers_min:        int   = 12
-    inlier_ratio_min:   float = 0.30
-    # LightGlue thresholds — strict, vérification finale
-    lg_matches_good_min:  int   = 30
-    lg_inliers_min:       int   = 20
-    lg_inlier_ratio_min:  float = 0.40
+    clip_sim_threshold: float = 0.55  # min SigLIP cosine similarity to attempt SIFT
+    # SIFT thresholds
+    matches_good_min:   int   = 30
+    inliers_min:        int   = 20
+    inlier_ratio_min:   float = 0.35
+    # LightGlue thresholds (non utilisés — symmetric_check=False)
+    lg_matches_good_min:  int   = 60
+    lg_inliers_min:       int   = 40
+    lg_inlier_ratio_min:  float = 0.50
     max_edges_per_node: int   = 3
-    symmetric_check:    bool  = True   # require match to pass in both directions
+    symmetric_check:    bool  = False  # vérification LightGlue désactivée
     resize_max:         int   = 1400
+    border_fraction:    float = 0.07   # mask this % of each edge in SIFT & LightGlue
 
     @classmethod
     def from_dict(cls, d: dict) -> "ClusterConfig":
@@ -88,11 +89,13 @@ class Clusterer:
             "inliers_min":       self.cfg.inliers_min,
             "inlier_ratio_min":  self.cfg.inlier_ratio_min,
             "resize_max":        self.cfg.resize_max,
+            "border_fraction":   self.cfg.border_fraction,
         })
         self._verifier = LightGlueMatcher({
             "matches_good_min":  self.cfg.lg_matches_good_min,
             "inliers_min":       self.cfg.lg_inliers_min,
             "inlier_ratio_min":  self.cfg.lg_inlier_ratio_min,
+            "border_fraction":   self.cfg.border_fraction,
         })
 
     # ------------------------------------------------------------------ #
