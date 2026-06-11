@@ -28,3 +28,6 @@ Thumbs.db
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Large binary files (PDFs go in report/ but are not tracked by git)
+*.pdf
